@@ -2,6 +2,9 @@
 
 import os
 
+# —— AWS Region ———————————————————————————————————————————————————————————
+AWS_REGION: str = os.getenv("AWS_REGION", "ap-south-1")  # Mumbai
+
 # —— Model Tiers ——————————————————————————————————————————————————————————
 OPENAI_MODEL_LOW: str = "gpt-5.4-nano"
 OPENAI_MODEL_HIGH: str = "gpt-5.4-mini"
@@ -27,6 +30,11 @@ LLM_CONFIG = {
         "temperature":     0.4,
     },
 }
+
+# —— Bedrock AgentCore Memory ————————————————————————————————————————————
+BEDROCK_MEMORY_ID       = os.getenv("BEDROCK_MEMORY_ID", "")
+AGENTCORE_NAMESPACE     = os.getenv("AGENTCORE_NAMESPACE", "research-agent")
+USE_BEDROCK_MEMORY      = os.getenv("USE_BEDROCK_MEMORY", "true").lower() in ("1", "true", "yes")
 
 # —— Semantic Dedup & Rerank Config ————————————————————————————————————————
 EMBEDDING_MODEL         = "all-MiniLM-L6-v2"

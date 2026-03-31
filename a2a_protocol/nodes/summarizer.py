@@ -83,8 +83,10 @@ def run(state: ResearchState) -> Dict[str, Any]:
         f"RESEARCH CORPUS:\n{'=' * 60}\n{corpus}\n{'=' * 60}"
     )
 
-    # Estimate max tokens needed (1 word ~ 1.5 tokens, plus margin)
-    max_tokens = int(desired_length * 2)
+    # Estimate max tokens needed (1 word ~ 1.5 tokens, plus margin).
+    # Reasoning models (e.g. gpt-5.4-*) consume internal "thinking" tokens from
+    # the same budget, so we need a generous floor to avoid starving the output.
+    max_tokens = max(int(desired_length * 2), 1024)
 
     llm = get_llm("summarizer")
     logger.info(f"  Calling {llm.get_provider_name()} ({llm.model}) for summarization...")
