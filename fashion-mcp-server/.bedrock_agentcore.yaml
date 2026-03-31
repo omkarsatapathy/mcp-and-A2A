@@ -1,0 +1,31 @@
+default_agent: fashion_tools
+agents:
+  fashion_tools:
+    name: fashion_tools
+    entrypoint: fashion_tools.py
+    platform: linux/arm64
+    container_runtime: docker
+    aws:
+      execution_role: arn:aws:iam::621607269762:role/AmazonBedrockAgentCoreSDKRuntime-ap-southeast-2-8f34999a76
+      execution_role_auto_create: false
+      account: '621607269762'
+      region: ap-southeast-2
+      ecr_repository: 621607269762.dkr.ecr.ap-southeast-2.amazonaws.com/bedrock-agentcore-fashion_tools
+      ecr_auto_create: false
+      network_configuration:
+        network_mode: PUBLIC
+      protocol_configuration:
+        server_protocol: MCP
+      observability:
+        enabled: true
+    bedrock_agentcore:
+      agent_id: fashion_tools-45ST45CcUt
+      agent_arn: arn:aws:bedrock-agentcore:ap-southeast-2:621607269762:runtime/fashion_tools-45ST45CcUt
+      agent_session_id: f0ca21bd-8e6b-4451-848e-490bb22414d5
+    codebuild:
+      project_name: bedrock-agentcore-fashion_tools-builder
+      execution_role: arn:aws:iam::621607269762:role/AmazonBedrockAgentCoreSDKCodeBuild-ap-southeast-2-8f34999a76
+      source_bucket: bedrock-agentcore-codebuild-sources-621607269762-ap-southeast-2
+    authorizer_configuration: null
+    request_header_configuration: null
+    oauth_configuration: null
