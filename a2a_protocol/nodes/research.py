@@ -6,18 +6,20 @@ Adapted from N02 of the daily_news_automation_via_telegram pipeline.
 Two-stage pipeline:
   Stage 1 — Query Producer:
     Invokes the LLM to generate 3-5 targeted search queries for the given topic.
-  Stage 2 — Parallel Search + Scrape:
-    All queries fired against Tavily Search API simultaneously.
-    Every returned URL is scraped in parallel using trafilatura
-    (with BeautifulSoup pre-processing to strip noise).
-    All extracted page texts are assembled into a single research corpus.
+  Stage 2 — Streaming Search + Scrape (producer-consumer):
+    Tavily searches run in parallel.  As each search completes it immediately
+    feeds its URLs into the scrape pool — scraping starts before all searches
+    finish (improvement #2).
+  Improvement #1 — Model Preloading:
+    Once scraping begins, dedup's ML models are loaded concurrently in the
+    background so they are warm by the time the dedup node starts.
 """
 
 import json
 import logging
 import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from typing import Any, Dict, List, Set
 
 import httpx
 from bs4 import BeautifulSoup
@@ -174,16 +176,41 @@ def _scrape_url(url: str) -> str:
     return ""
 
 
-def _scrape_all(urls: List[str]) -> List[str]:
-    """Scrape all URLs concurrently. Returns only pages with usable content."""
+def _scrape_streaming(
+    search_futures: Dict[Future, Any],
+    scrape_executor: ThreadPoolExecutor,
+) -> List[str]:
+    """
+    Producer-consumer scrape: submit scrape jobs as each Tavily search lands
+    rather than waiting for all searches to finish first (improvement #2).
+
+    Args:
+        search_futures: mapping of {Future -> SearchQuery} from the Tavily pool.
+        scrape_executor: shared ThreadPoolExecutor for scraping.
+
+    Returns:
+        List of non-empty page texts.
+    """
+    seen_urls: Set[str] = set()
+    scrape_futures: Dict[Future, str] = {}
     texts: List[str] = []
-    with ThreadPoolExecutor(max_workers=SCRAPE_WORKERS) as executor:
-        futures = {executor.submit(_scrape_url, u): u for u in urls}
-        for future in as_completed(futures):
-            text = future.result()
-            if text:
-                texts.append(text)
-    return texts
+
+    # As each Tavily search completes, immediately queue its URLs for scraping.
+    for search_future in as_completed(search_futures):
+        urls = search_future.result()
+        for url in urls:
+            if url not in seen_urls:
+                seen_urls.add(url)
+                f = scrape_executor.submit(_scrape_url, url)
+                scrape_futures[f] = url
+
+    # Collect scrape results.
+    for scrape_future in as_completed(scrape_futures):
+        text = scrape_future.result()
+        if text:
+            texts.append(text)
+
+    return texts, seen_urls
 
 
 # ── Node entry point ───────────────────────────────────────────────────────────
@@ -214,29 +241,37 @@ def run(state: ResearchState) -> Dict[str, Any]:
     for i, q in enumerate(query_plan.queries, 1):
         logger.info(f"  Q{i}: {q.query}")
 
-    # Stage 2a: Parallel Tavily searches
-    logger.info(f"  Stage 2a — Tavily search ({len(query_plan.queries)} queries in parallel)")
-    all_urls: List[str] = []
-    with ThreadPoolExecutor(max_workers=len(query_plan.queries)) as executor:
-        futures = {
-            executor.submit(_tavily_search, q.query, tavily_api_key): q
-            for q in query_plan.queries
-        }
-        for future in as_completed(futures):
-            all_urls.extend(future.result())
-
-    # Deduplicate URLs
-    seen: set = set()
-    unique_urls = [u for u in all_urls if not (u in seen or seen.add(u))]
+    n_queries = len(query_plan.queries)
     logger.info(
-        f"  {len(unique_urls)} unique URLs after deduplication "
-        f"({len(all_urls) - len(unique_urls)} duplicates removed)"
+        f"  Stage 2 — Streaming search+scrape "
+        f"({n_queries} Tavily queries, scrape pool={SCRAPE_WORKERS} workers)"
     )
 
-    # Stage 2b: Parallel scraping
-    logger.info(f"  Stage 2b — Scraping {len(unique_urls)} pages in parallel")
-    page_texts = _scrape_all(unique_urls)
-    logger.info(f"  {len(page_texts)}/{len(unique_urls)} pages yielded usable content")
+    # Improvement #1: kick off ML model preloading in the background now —
+    # both models will be warm by the time the dedup node starts.
+    from a2a_protocol.nodes import dedup as _dedup_node
+    warmup_executor = ThreadPoolExecutor(max_workers=1)
+    warmup_future = warmup_executor.submit(_dedup_node.warmup)
+
+    # Improvement #2: producer-consumer — scraping starts as each search lands.
+    with ThreadPoolExecutor(max_workers=n_queries) as search_pool, \
+         ThreadPoolExecutor(max_workers=SCRAPE_WORKERS) as scrape_pool:
+
+        search_futures = {
+            search_pool.submit(_tavily_search, q.query, tavily_api_key): q
+            for q in query_plan.queries
+        }
+        page_texts, seen_urls = _scrape_streaming(search_futures, scrape_pool)
+
+    unique_count = len(seen_urls)
+    logger.info(
+        f"  {unique_count} unique URLs discovered; "
+        f"{len(page_texts)} pages yielded usable content"
+    )
+
+    # Ensure warmup completed (it should be done well before this point).
+    warmup_future.result()
+    warmup_executor.shutdown(wait=False)
 
     # Assemble corpus
     separator = "\n\n" + "-" * 80 + "\n\n"

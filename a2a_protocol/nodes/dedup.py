@@ -8,12 +8,19 @@ Three-stage in-memory pipeline:
   Stage 2 — Semantic Deduplication: FAISS cosine-sim dedup.
   Stage 3 — CrossEncoder Reranking: Score & rank against the single research topic.
 
+Parallel optimisations:
+  - warmup(): loads both ML models concurrently; call during the preceding
+    research node so models are warm by the time dedup starts.
+  - Parallel model loading in run(): reranker loads in a background thread
+    while embedding + dedup are executing (improvement #3).
+
 Output state key: ranked_chunks -> List[chunk_dict]
 Each chunk_dict has keys: chunk_id, text, word_count, relevance_score
 """
 
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -58,6 +65,23 @@ def _get_model(model_type: str):
             _reranker_model = CrossEncoder(_rerank_source)
         return _reranker_model
     raise ValueError(f"Unknown model_type: {model_type}")
+
+
+def warmup() -> None:
+    """
+    Pre-load both ML models concurrently.
+
+    Call this from the research node (improvement #1) so both models are
+    fully loaded by the time the dedup node starts, hiding ~8 s of I/O
+    behind research's network wait.
+    """
+    logger.info("  [dedup warmup] Pre-loading embedding + reranker models in parallel...")
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        f_embed = pool.submit(_get_model, "embedding")
+        f_rerank = pool.submit(_get_model, "reranker")
+        f_embed.result()
+        f_rerank.result()
+    logger.info("  [dedup warmup] Both models ready.")
 
 
 # ── Stage 1: Chunking ─────────────────────────────────────────────────────────
@@ -167,7 +191,12 @@ def run(state: ResearchState) -> Dict[str, Any]:
         return {"ranked_chunks": []}
 
     # Stage 2: Embed + Deduplicate
+    # Improvement #3: start loading the reranker in the background now —
+    # it will be ready (or nearly so) by the time embed + dedup finish.
     import numpy as np
+    _reranker_pool = ThreadPoolExecutor(max_workers=1)
+    reranker_future = _reranker_pool.submit(_get_model, "reranker")
+
     texts = [c["text"] for c in chunks]
     embeddings: np.ndarray = _get_model("embedding").encode(
         texts, normalize_embeddings=True, show_progress_bar=False
@@ -180,6 +209,10 @@ def run(state: ResearchState) -> Dict[str, Any]:
         f"  Stage 2b — Dedup: {len(chunks)} -> {len(unique_chunks)} unique chunks "
         f"({dropped} dropped, threshold={SIMILARITY_THRESHOLD})"
     )
+
+    # Ensure reranker is ready before stage 3 (usually already done by now)
+    reranker_future.result()
+    _reranker_pool.shutdown(wait=False)
 
     # Stage 3: CrossEncoder reranking against the single topic
     top_k = _rerank_for_topic(unique_chunks, topic)
