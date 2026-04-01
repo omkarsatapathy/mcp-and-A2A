@@ -95,6 +95,11 @@ async def ping(request: Request) -> JSONResponse:
 
 app.add_route("/ping", ping, methods=["GET"])
 
+# AgentCore routes all POST /runtimes/{arn}/invocations to the container's
+# /invocations path. Mirror the A2A JSON-RPC handler there so both local (/)
+# and AgentCore (/invocations) work without changing anything else.
+app.add_route("/invocations", server._handle_requests, methods=["POST"])
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host=HOST, port=PORT)

@@ -94,16 +94,26 @@ class AWSSigV4Auth(Auth):
         log.debug("AWSSigV4Auth initialised  service=%s  region=%s", service, self._region)
 
     def auth_flow(self, request: Request):
-        # httpx request → botocore AWSRequest → SigV4 sign → copy headers back
+        # Sign only the minimal stable headers (host + content-type).
+        # Signing ALL httpx headers (accept-encoding, connection, content-length…)
+        # causes 403 because httpx may independently modify those headers after
+        # we sign them, making the canonical request mismatch at AWS.
+        minimal_headers = {
+            "host": request.url.host,
+            "content-type": request.headers.get("content-type", "application/json"),
+        }
         aws_req = botocore.awsrequest.AWSRequest(
             method=request.method,
             url=str(request.url),
             data=request.content,
-            headers=dict(request.headers),
+            headers=minimal_headers,
         )
         botocore.auth.SigV4Auth(self._creds, self._service, self._region).add_auth(aws_req)
-        for key, val in aws_req.headers.items():
-            request.headers[key] = val
+        # Inject only the auth headers — leave all other httpx headers untouched.
+        for key in ("Authorization", "X-Amz-Date", "X-Amz-Security-Token", "X-Amz-Content-SHA256"):
+            val = aws_req.headers.get(key)
+            if val:
+                request.headers[key] = val
         log.debug("SigV4 signed  method=%s  url=%s", request.method, request.url)
         yield request
 
@@ -140,7 +150,7 @@ def _agentcore_base_url(arn: str) -> str:
     """
     url = (
         f"https://bedrock-agentcore.{AWS_REGION}.amazonaws.com"
-        f"/runtimes/{quote(arn, safe='')}/invocations/"
+        f"/runtimes/{quote(arn, safe='')}/invocations"
     )
     log.debug("AgentCore A2A base URL: %s", url)
     return url
