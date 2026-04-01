@@ -7,6 +7,6 @@ __pycache__/
 .gitignore
 *.md
 deploy.sh
-run_remote.py
-export_models_onnx.py
+scripts/
 .DS_Store
+docker-compose.yml

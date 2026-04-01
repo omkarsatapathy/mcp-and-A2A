@@ -5,15 +5,15 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load .env from the same directory as this script
-load_dotenv(Path(__file__).parent / ".env")
+# Load .env from the a2a_protocol root (one level up from scripts/)
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
 
-from a2a_protocol.graph import compiled_graph
+from a2a_protocol.pipeline.graph import compiled_graph
 
 query = input("Enter your research query: ").strip()
 

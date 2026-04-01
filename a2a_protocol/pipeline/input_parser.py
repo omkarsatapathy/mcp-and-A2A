@@ -15,8 +15,8 @@ from typing import Any, Dict
 
 from pydantic import BaseModel, Field
 
-from a2a_protocol.llm_factory.factory import get_llm
-from a2a_protocol.state import ResearchState
+from a2a_protocol.providers.factory import get_llm
+from a2a_protocol.pipeline.state import ResearchState
 
 logger = logging.getLogger(__name__)
 

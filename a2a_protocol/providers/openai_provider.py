@@ -1,5 +1,5 @@
 from openai import OpenAI
-from a2a_protocol.llm_factory.base import BaseLLMProvider, LLMResponse
+from a2a_protocol.providers.base import BaseLLMProvider, LLMResponse
 
 
 class OpenAIProvider(BaseLLMProvider):

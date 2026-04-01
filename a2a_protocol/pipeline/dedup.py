@@ -40,7 +40,7 @@ from a2a_protocol.config import (
     SIMILARITY_THRESHOLD,
     TOP_K_CHUNKS,
 )
-from a2a_protocol.state import ResearchState
+from a2a_protocol.pipeline.state import ResearchState
 
 logger = logging.getLogger(__name__)
 

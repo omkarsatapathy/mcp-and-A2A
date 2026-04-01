@@ -31,9 +31,9 @@ from a2a_protocol.config import (
     SCRAPE_WORKERS,
     TAVILY_MAX_RESULTS,
 )
-from a2a_protocol.llm_factory.factory import get_llm
+from a2a_protocol.providers.factory import get_llm
 from a2a_protocol.services.secrets_service import get_secret
-from a2a_protocol.state import ResearchState
+from a2a_protocol.pipeline.state import ResearchState
 
 logger = logging.getLogger(__name__)
 
@@ -320,7 +320,7 @@ def run(state: ResearchState) -> Dict[str, Any]:
 
     # Improvement #1: kick off ML model preloading in the background now —
     # both models will be warm by the time the dedup node starts.
-    from a2a_protocol.nodes import dedup as _dedup_node
+    from a2a_protocol.pipeline import dedup as _dedup_node
     warmup_executor = ThreadPoolExecutor(max_workers=1)
     warmup_future = warmup_executor.submit(_dedup_node.warmup)
 

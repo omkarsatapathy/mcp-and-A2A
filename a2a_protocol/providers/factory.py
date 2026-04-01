@@ -1,12 +1,12 @@
 from a2a_protocol.config import LLM_CONFIG
-from a2a_protocol.llm_factory.base import BaseLLMProvider
+from a2a_protocol.providers.base import BaseLLMProvider
 from a2a_protocol.services.secrets_service import get_secret
 
 
 def _get_provider_class(provider: str):
     """Lazily import provider classes."""
     if provider == "openai":
-        from a2a_protocol.llm_factory.openai_provider import OpenAIProvider
+        from a2a_protocol.providers.openai_provider import OpenAIProvider
         return OpenAIProvider
     raise ValueError(f"Unknown provider: {provider}")
 

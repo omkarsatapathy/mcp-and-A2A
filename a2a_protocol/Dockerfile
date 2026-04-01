@@ -71,12 +71,9 @@ COPY . ./a2a_protocol/
 
 EXPOSE 8080
 
-# Run with uvicorn using 14 workers (1 worker per core)
-# --workers 14 distributes requests across all CPU cores
+# Run with uvicorn — single worker (InMemoryTaskStore is not shared across workers)
 CMD ["python", "-m", "uvicorn", \
-     "a2a_protocol.a2a_server:app", \
+     "a2a_protocol.server.a2a_server:app", \
      "--host", "0.0.0.0", \
      "--port", "8080", \
-     "--workers", "14", \
-     "--limit-concurrency", "100", \
      "--timeout-keep-alive", "120"]
