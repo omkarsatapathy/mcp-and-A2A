@@ -14,6 +14,10 @@ Parallel optimisations:
   - Parallel model loading in run(): reranker loads in a background thread
     while embedding + dedup are executing (improvement #3).
 
+Inference backend: ONNX Runtime (no PyTorch dependency).
+  Models are pre-exported to int8 ONNX format via export_models_onnx.py
+  and stored at LOCAL_MODEL_DIR/embedding/ and LOCAL_MODEL_DIR/reranker/.
+
 Output state key: ranked_chunks -> List[chunk_dict]
 Each chunk_dict has keys: chunk_id, text, word_count, relevance_score
 """
@@ -21,17 +25,18 @@ Each chunk_dict has keys: chunk_id, text, word_count, relevance_score
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
+import numpy as np
+import onnxruntime as ort
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from transformers import AutoTokenizer
 
 from a2a_protocol.config import (
     CHUNK_OVERLAP,
     CHUNK_SIZE,
-    EMBEDDING_MODEL,
     LOCAL_MODEL_DIR,
     MIN_CHUNK_WORDS,
-    RERANKER_MODEL,
     SIMILARITY_THRESHOLD,
     TOP_K_CHUNKS,
 )
@@ -39,30 +44,88 @@ from a2a_protocol.state import ResearchState
 
 logger = logging.getLogger(__name__)
 
+_EMBEDDING_MODEL_DIR = os.path.join(LOCAL_MODEL_DIR, "embedding")
+_RERANKER_MODEL_DIR = os.path.join(LOCAL_MODEL_DIR, "reranker")
+
+
+# ── ONNX inference wrappers ────────────────────────────────────────────────────
+
+class _OnnxEmbedder:
+    """Drop-in for SentenceTransformer backed by ONNX Runtime — no PyTorch."""
+
+    def __init__(self, model_dir: str):
+        self._tokenizer = AutoTokenizer.from_pretrained(model_dir)
+        self._session = ort.InferenceSession(
+            os.path.join(model_dir, "model_quantized.onnx"),
+            providers=["CPUExecutionProvider"],
+        )
+        self._input_names = {inp.name for inp in self._session.get_inputs()}
+
+    def encode(self, texts, normalize_embeddings: bool = True,
+               show_progress_bar: bool = False, batch_size: int = 64):
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            enc = self._tokenizer(
+                batch, padding=True, truncation=True,
+                max_length=256, return_tensors="np",
+            )
+            inputs = {k: v for k, v in enc.items() if k in self._input_names}
+            token_emb = self._session.run(None, inputs)[0]          # [B, T, D]
+            mask = enc["attention_mask"][:, :, np.newaxis].astype(np.float32)
+            embeddings = (token_emb * mask).sum(1) / mask.sum(1).clip(1e-9)
+            if normalize_embeddings:
+                embeddings /= np.linalg.norm(embeddings, axis=1, keepdims=True).clip(1e-9)
+            all_embeddings.append(embeddings.astype(np.float32))
+        return np.vstack(all_embeddings)
+
+
+class _OnnxReranker:
+    """Drop-in for CrossEncoder backed by ONNX Runtime — no PyTorch."""
+
+    def __init__(self, model_dir: str):
+        self._tokenizer = AutoTokenizer.from_pretrained(model_dir)
+        self._session = ort.InferenceSession(
+            os.path.join(model_dir, "model_quantized.onnx"),
+            providers=["CPUExecutionProvider"],
+        )
+        self._input_names = {inp.name for inp in self._session.get_inputs()}
+
+    def predict(self, pairs, show_progress_bar: bool = False, batch_size: int = 32):
+        all_scores: list = []
+        for i in range(0, len(pairs), batch_size):
+            batch = pairs[i : i + batch_size]
+            queries, texts = zip(*batch)
+            enc = self._tokenizer(
+                list(queries), list(texts),
+                padding=True, truncation=True,
+                max_length=512, return_tensors="np",
+            )
+            inputs = {k: v for k, v in enc.items() if k in self._input_names}
+            logits = self._session.run(None, inputs)[0]              # [B, 1] or [B, 2]
+            scores = logits[:, 0] if logits.shape[-1] == 1 else logits[:, 1]
+            all_scores.extend(scores.tolist())
+        return np.array(all_scores, dtype=np.float32)
+
+
 # ── Model cache ────────────────────────────────────────────────────────────────
-_embedding_local = os.path.join(LOCAL_MODEL_DIR, EMBEDDING_MODEL)
-_reranker_local = os.path.join(LOCAL_MODEL_DIR, RERANKER_MODEL)
 
-_embed_source = _embedding_local if os.path.isdir(_embedding_local) else EMBEDDING_MODEL
-_rerank_source = _reranker_local if os.path.isdir(_reranker_local) else RERANKER_MODEL
-
-_embedding_model = None
-_reranker_model = None
+_embedding_model: Optional[_OnnxEmbedder] = None
+_reranker_model: Optional[_OnnxReranker] = None
 
 
 def _get_model(model_type: str):
-    """Return the SentenceTransformer or CrossEncoder, loading on first use."""
-    from sentence_transformers import CrossEncoder, SentenceTransformer
+    """Return the ONNX embedder or reranker, loading on first use."""
     global _embedding_model, _reranker_model
     if model_type == "embedding":
         if _embedding_model is None:
-            logger.info(f"  Loading embedding model: {_embed_source}")
-            _embedding_model = SentenceTransformer(_embed_source)
+            logger.info(f"  Loading ONNX embedding model from {_EMBEDDING_MODEL_DIR}")
+            _embedding_model = _OnnxEmbedder(_EMBEDDING_MODEL_DIR)
         return _embedding_model
     elif model_type == "reranker":
         if _reranker_model is None:
-            logger.info(f"  Loading reranker model: {_rerank_source}")
-            _reranker_model = CrossEncoder(_rerank_source)
+            logger.info(f"  Loading ONNX reranker model from {_RERANKER_MODEL_DIR}")
+            _reranker_model = _OnnxReranker(_RERANKER_MODEL_DIR)
         return _reranker_model
     raise ValueError(f"Unknown model_type: {model_type}")
 

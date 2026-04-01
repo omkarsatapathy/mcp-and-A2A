@@ -30,3 +30,6 @@ Thumbs.db
 
 # Claude Code
 .claude/
+models/
+Dockerfile
+a2a_protocol/Dockerfile

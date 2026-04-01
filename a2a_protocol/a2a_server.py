@@ -5,16 +5,23 @@ Exposes the research agent as a discoverable A2A service:
   - GET  /.well-known/agent-card.json  → AgentCard (RFC 8615 discovery)
   - POST /                             → JSON-RPC 2.0 (message/send, message/stream)
 
+Bedrock AgentCore Runtime compatibility:
+  - GET  /ping                         → Health check (required by AgentCore)
+  - POST /invocations                  → AgentCore invocation bridge
+
 Usage:
     python -m a2a_protocol.a2a_server
 """
 
 import logging
 import os
+import uuid
 from pathlib import Path
 
 import uvicorn
 from dotenv import load_dotenv
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 # Load .env from the same directory as this script (matches run.py behaviour)
 load_dotenv(Path(__file__).parent / ".env")
@@ -85,6 +92,81 @@ server = A2AStarletteApplication(
 )
 
 app = server.build()
+
+
+# ── Bedrock AgentCore Runtime Endpoints ─────────────────────────────────────
+# AgentCore requires /ping (GET) for health and /invocations (POST) for calls.
+# /invocations bridges AgentCore payloads into A2A JSON-RPC message/send.
+
+
+@app.route("/ping", methods=["GET"])
+async def ping(request: Request) -> JSONResponse:
+    return JSONResponse({"status": "healthy"})
+
+
+@app.route("/invocations", methods=["POST"])
+async def invocations(request: Request) -> JSONResponse:
+    """Bridge AgentCore invoke_agent_runtime → A2A message/send.
+
+    Expected payload from AgentCore:
+        {"input": {"prompt": "..."}}
+
+    This wraps it into a JSON-RPC message/send call to the A2A handler
+    and returns the result.
+    """
+    body = await request.json()
+    prompt = body.get("input", {}).get("prompt", "")
+    if not prompt:
+        return JSONResponse(
+            {"error": "No prompt found in input. Provide {'input': {'prompt': '...'}}"},
+            status_code=400,
+        )
+
+    # Build an A2A JSON-RPC message/send request
+    a2a_payload = {
+        "jsonrpc": "2.0",
+        "id": str(uuid.uuid4()),
+        "method": "message/send",
+        "params": {
+            "message": {
+                "messageId": str(uuid.uuid4()),
+                "role": "user",
+                "parts": [{"kind": "text", "text": prompt}],
+            }
+        },
+    }
+
+    # Forward to the A2A handler internally via httpx
+    import httpx
+
+    async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{PORT}") as client:
+        resp = await client.post(
+            "/",
+            json=a2a_payload,
+            headers={"Content-Type": "application/json"},
+            timeout=300.0,
+        )
+
+    result = resp.json()
+
+    # Extract the research summary from the A2A response
+    task = result.get("result", {})
+    artifacts = task.get("artifacts", [])
+    output_text = ""
+    if artifacts:
+        for artifact in artifacts:
+            for part in artifact.get("parts", []):
+                if part.get("kind") == "text":
+                    output_text += part["text"]
+
+    return JSONResponse({
+        "output": {
+            "message": output_text or "No result produced",
+            "task_id": task.get("id", ""),
+            "status": task.get("status", {}).get("state", "unknown"),
+        }
+    })
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host=HOST, port=PORT)
