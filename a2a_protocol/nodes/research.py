@@ -26,6 +26,7 @@ from bs4 import BeautifulSoup
 from pydantic import BaseModel, Field
 
 from a2a_protocol.config import (
+    GOOGLE_SEARCH_MAX_RESULTS,
     MIN_CONTENT_LEN,
     SCRAPE_WORKERS,
     TAVILY_MAX_RESULTS,
@@ -108,7 +109,34 @@ def _generate_queries(topic: str) -> QueryPlan:
     return plan
 
 
-# ── Stage 2a: Tavily search ────────────────────────────────────────────────────
+# ── Stage 2a: Google Custom Search (primary) ───────────────────────────────────
+
+def _google_search(
+    query: str,
+    api_key: str,
+    search_engine_id: str,
+    max_results: int = GOOGLE_SEARCH_MAX_RESULTS,
+) -> List[str]:
+    """Fire one Google Custom Search query and return result URLs."""
+    try:
+        from googleapiclient.discovery import build
+        from googleapiclient.errors import HttpError
+
+        service = build("customsearch", "v1", developerKey=api_key)
+        result = service.cse().list(
+            q=query,
+            cx=search_engine_id,
+            num=min(max_results, 10),  # Google CSE hard cap is 10
+        ).execute()
+        urls = [item["link"] for item in result.get("items", []) if item.get("link")]
+        logger.info(f"    [Google] [{query[:55]}...] -> {len(urls)} URLs")
+        return urls
+    except Exception as exc:
+        logger.warning(f"    Google Search failed for '{query[:55]}...': {exc}")
+        return []
+
+
+# ── Stage 2a: Tavily search (fallback) ────────────────────────────────────────
 
 def _tavily_search(query: str, api_key: str, max_results: int = TAVILY_MAX_RESULTS) -> List[str]:
     """Fire one Tavily search query and return the result URLs."""
@@ -124,11 +152,31 @@ def _tavily_search(query: str, api_key: str, max_results: int = TAVILY_MAX_RESUL
         resp = httpx.post("https://api.tavily.com/search", json=payload, timeout=30)
         resp.raise_for_status()
         urls = [r["url"] for r in resp.json().get("results", []) if r.get("url")]
-        logger.info(f"    [{query[:55]}...] -> {len(urls)} URLs")
+        logger.info(f"    [Tavily] [{query[:55]}...] -> {len(urls)} URLs")
         return urls
     except Exception as exc:
         logger.warning(f"    Tavily failed for '{query[:55]}...': {exc}")
         return []
+
+
+def _search_with_fallback(
+    query: str,
+    google_api_key: str | None,
+    google_cse_id: str | None,
+    tavily_api_key: str | None,
+) -> List[str]:
+    """Try Google Search first; fall back to Tavily if Google fails or is unconfigured."""
+    if google_api_key and google_cse_id:
+        urls = _google_search(query, google_api_key, google_cse_id)
+        if urls:
+            return urls
+        logger.warning(f"    Google returned no results for '{query[:55]}...', falling back to Tavily")
+
+    if tavily_api_key:
+        return _tavily_search(query, tavily_api_key)
+
+    logger.error(f"    No search backend available for '{query[:55]}...'")
+    return []
 
 
 # ── Stage 2b: Page scraping ────────────────────────────────────────────────────
@@ -179,7 +227,7 @@ def _scrape_url(url: str) -> str:
 def _scrape_streaming(
     search_futures: Dict[Future, Any],
     scrape_executor: ThreadPoolExecutor,
-) -> List[str]:
+) -> tuple[List[str], Set[str]]:
     """
     Producer-consumer scrape: submit scrape jobs as each Tavily search lands
     rather than waiting for all searches to finish first (improvement #2).
@@ -233,7 +281,30 @@ def run(state: ResearchState) -> Dict[str, Any]:
     if not topic:
         raise ValueError("topic is empty — cannot run research")
 
-    tavily_api_key = get_secret("TAVILY_API_KEY")
+    # Resolve search credentials — Google is primary, Tavily is fallback.
+    # All keys go through get_secret() so they work with both .env and AWS SM.
+    try:
+        google_api_key = get_secret("GOOGLE_SEARCH_API_KEY")
+    except ValueError:
+        google_api_key = None
+    try:
+        google_cse_id = get_secret("GOOGLE_SEARCH_ENGINE_ID")
+    except ValueError:
+        google_cse_id = None
+    try:
+        tavily_api_key = get_secret("TAVILY_API_KEY")
+    except ValueError:
+        tavily_api_key = None
+
+    if google_api_key and google_cse_id:
+        logger.info("  Search backend: Google Custom Search (Tavily as fallback)")
+    elif tavily_api_key:
+        logger.info("  Search backend: Tavily only (Google not configured)")
+    else:
+        raise RuntimeError(
+            "No search backend configured. "
+            "Set GOOGLE_SEARCH_API_KEY + GOOGLE_SEARCH_ENGINE_ID, or TAVILY_API_KEY."
+        )
 
     # Stage 1: Generate queries
     logger.info(f"  Stage 1 — Generating search queries for topic: '{topic}'")
@@ -244,7 +315,7 @@ def run(state: ResearchState) -> Dict[str, Any]:
     n_queries = len(query_plan.queries)
     logger.info(
         f"  Stage 2 — Streaming search+scrape "
-        f"({n_queries} Tavily queries, scrape pool={SCRAPE_WORKERS} workers)"
+        f"({n_queries} queries, scrape pool={SCRAPE_WORKERS} workers)"
     )
 
     # Improvement #1: kick off ML model preloading in the background now —
@@ -258,7 +329,9 @@ def run(state: ResearchState) -> Dict[str, Any]:
          ThreadPoolExecutor(max_workers=SCRAPE_WORKERS) as scrape_pool:
 
         search_futures = {
-            search_pool.submit(_tavily_search, q.query, tavily_api_key): q
+            search_pool.submit(
+                _search_with_fallback, q.query, google_api_key, google_cse_id, tavily_api_key
+            ): q
             for q in query_plan.queries
         }
         page_texts, seen_urls = _scrape_streaming(search_futures, scrape_pool)

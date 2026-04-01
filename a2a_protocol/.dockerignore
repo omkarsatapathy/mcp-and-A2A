@@ -1,0 +1,12 @@
+.env
+.env.*
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+*.md
+deploy.sh
+run_remote.py
+export_models_onnx.py
+.DS_Store

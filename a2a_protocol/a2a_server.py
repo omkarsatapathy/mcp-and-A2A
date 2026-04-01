@@ -99,12 +99,10 @@ app = server.build()
 # /invocations bridges AgentCore payloads into A2A JSON-RPC message/send.
 
 
-@app.route("/ping", methods=["GET"])
 async def ping(request: Request) -> JSONResponse:
     return JSONResponse({"status": "healthy"})
 
 
-@app.route("/invocations", methods=["POST"])
 async def invocations(request: Request) -> JSONResponse:
     """Bridge AgentCore invoke_agent_runtime → A2A message/send.
 
@@ -114,58 +112,77 @@ async def invocations(request: Request) -> JSONResponse:
     This wraps it into a JSON-RPC message/send call to the A2A handler
     and returns the result.
     """
-    body = await request.json()
-    prompt = body.get("input", {}).get("prompt", "")
-    if not prompt:
-        return JSONResponse(
-            {"error": "No prompt found in input. Provide {'input': {'prompt': '...'}}"},
-            status_code=400,
-        )
+    try:
+        body = await request.json()
+        prompt = body.get("input", {}).get("prompt", "")
+        if not prompt:
+            return JSONResponse(
+                {"error": "No prompt found in input. Provide {'input': {'prompt': '...'}}"},
+                status_code=400,
+            )
 
-    # Build an A2A JSON-RPC message/send request
-    a2a_payload = {
-        "jsonrpc": "2.0",
-        "id": str(uuid.uuid4()),
-        "method": "message/send",
-        "params": {
-            "message": {
-                "messageId": str(uuid.uuid4()),
-                "role": "user",
-                "parts": [{"kind": "text", "text": prompt}],
-            }
-        },
-    }
-
-    # Forward to the A2A handler internally via httpx
-    import httpx
-
-    async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{PORT}") as client:
-        resp = await client.post(
-            "/",
-            json=a2a_payload,
-            headers={"Content-Type": "application/json"},
-            timeout=300.0,
-        )
-
-    result = resp.json()
-
-    # Extract the research summary from the A2A response
-    task = result.get("result", {})
-    artifacts = task.get("artifacts", [])
-    output_text = ""
-    if artifacts:
-        for artifact in artifacts:
-            for part in artifact.get("parts", []):
-                if part.get("kind") == "text":
-                    output_text += part["text"]
-
-    return JSONResponse({
-        "output": {
-            "message": output_text or "No result produced",
-            "task_id": task.get("id", ""),
-            "status": task.get("status", {}).get("state", "unknown"),
+        # Build an A2A JSON-RPC message/send request
+        a2a_payload = {
+            "jsonrpc": "2.0",
+            "id": str(uuid.uuid4()),
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "messageId": str(uuid.uuid4()),
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": prompt}],
+                }
+            },
         }
-    })
+
+        # Forward to the A2A handler internally via httpx
+        import httpx
+        import logging as log
+
+        logger = log.getLogger(__name__)
+        logger.info(f"[/invocations] Received prompt: {prompt[:100]}")
+
+        async with httpx.AsyncClient(base_url=f"http://127.0.0.1:{PORT}") as client:
+            resp = await client.post(
+                "/",
+                json=a2a_payload,
+                headers={"Content-Type": "application/json"},
+                timeout=300.0,
+            )
+
+        logger.info(f"[/invocations] A2A response status: {resp.status_code}")
+        result = resp.json()
+
+        # Extract the research summary from the A2A response
+        task = result.get("result", {})
+        artifacts = task.get("artifacts", [])
+        output_text = ""
+        if artifacts:
+            for artifact in artifacts:
+                for part in artifact.get("parts", []):
+                    if part.get("kind") == "text":
+                        output_text += part["text"]
+
+        return JSONResponse({
+            "output": {
+                "message": output_text or "No result produced",
+                "task_id": task.get("id", ""),
+                "status": task.get("status", {}).get("state", "unknown"),
+            }
+        })
+    except Exception as e:
+        import logging as log
+        logger = log.getLogger(__name__)
+        logger.exception(f"[/invocations] Error: {e}")
+        return JSONResponse(
+            {"error": f"Internal error: {str(e)}"},
+            status_code=500,
+        )
+
+
+# Register AgentCore routes
+app.add_route("/ping", ping, methods=["GET"])
+app.add_route("/invocations", invocations, methods=["POST"])
 
 
 if __name__ == "__main__":

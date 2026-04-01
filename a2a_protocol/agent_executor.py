@@ -10,7 +10,6 @@ retrieve prior context for follow-up queries.
 
 import asyncio
 import logging
-import os
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
@@ -26,8 +25,6 @@ from a2a_protocol.agent import run_research_agent
 from a2a_protocol.services.memory_service import get_memory_store
 
 logger = logging.getLogger(__name__)
-
-_USE_MEMORY = os.getenv("USE_BEDROCK_MEMORY", "true").lower() in ("1", "true", "yes")
 
 
 class ResearchAgentExecutor(AgentExecutor):
@@ -73,34 +70,30 @@ class ResearchAgentExecutor(AgentExecutor):
             # 4. Retrieve prior memories for context enrichment
             actor_id = "a2a-client"
             prior_context = ""
-            if _USE_MEMORY:
-                try:
-                    memory_store = get_memory_store()
-                    loop = asyncio.get_running_loop()
-                    memories = await loop.run_in_executor(
-                        None,
-                        memory_store.search_memories,
-                        session_id, actor_id, query, 3,
-                    )
-                    if memories:
-                        snippets = [
-                            f"[Prior]: {mem.get('text', '')[:500]}"
-                            for mem in memories if mem.get("text")
-                        ]
-                        if snippets:
-                            prior_context = (
-                                "\n\n--- PRIOR CONTEXT FROM MEMORY ---\n"
-                                + "\n".join(snippets)
-                                + "\n--- END PRIOR CONTEXT ---\n\n"
-                            )
-                            logger.info(
-                                "Enriched query with %d prior memories", len(snippets)
-                            )
-                except Exception:
-                    logger.warning(
-                        "Memory retrieval failed — proceeding without context",
-                        exc_info=True,
-                    )
+            try:
+                memory_store = get_memory_store()
+                loop = asyncio.get_running_loop()
+                memories = await loop.run_in_executor(
+                    None,
+                    memory_store.search_memories,
+                    session_id, actor_id, query, 3,
+                )
+                if memories:
+                    snippets = [
+                        f"[Prior]: {mem.get('text', '')[:500]}"
+                        for mem in memories if mem.get("text")
+                    ]
+                    if snippets:
+                        prior_context = (
+                            "\n\n--- PRIOR CONTEXT FROM MEMORY ---\n"
+                            + "\n".join(snippets)
+                            + "\n--- END PRIOR CONTEXT ---\n\n"
+                        )
+                        logger.info(
+                            "Enriched query with %d prior memories", len(snippets)
+                        )
+            except Exception:
+                logger.exception("Memory retrieval failed")
 
             # 5. Run the LangGraph pipeline (blocking → offload to thread)
             enriched_query = prior_context + query if prior_context else query
@@ -110,23 +103,19 @@ class ResearchAgentExecutor(AgentExecutor):
             )
 
             # 6. Store result in Bedrock AgentCore Memory
-            if _USE_MEMORY:
-                try:
-                    memory_store = get_memory_store()
-                    await loop.run_in_executor(
-                        None,
-                        memory_store.store_research_result,
-                        session_id,
-                        actor_id,
-                        query,
-                        result,
-                        {"word_count": len(result.split()), "task_id": context.task_id},
-                    )
-                except Exception:
-                    logger.warning(
-                        "Failed to store memory — result still returned",
-                        exc_info=True,
-                    )
+            try:
+                memory_store = get_memory_store()
+                await loop.run_in_executor(
+                    None,
+                    memory_store.store_research_result,
+                    session_id,
+                    actor_id,
+                    query,
+                    result,
+                    {"word_count": len(result.split()), "task_id": context.task_id},
+                )
+            except Exception:
+                logger.warning("Failed to store memory — result still returned", exc_info=True)
 
             # 7. Return the research summary as an Artifact
             await event_queue.enqueue_event(

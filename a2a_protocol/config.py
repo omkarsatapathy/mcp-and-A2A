@@ -31,22 +31,25 @@ LLM_CONFIG = {
     },
 }
 
-# —— Bedrock AgentCore Memory ————————————————————————————————————————————
-BEDROCK_MEMORY_ID       = os.getenv("BEDROCK_MEMORY_ID", "")
+# —— Bedrock AgentCore ————————————————————————————————————————————————————
+BEDROCK_MEMORY_ID       = os.getenv("BEDROCK_MEMORY_ID", "")          # required
 AGENTCORE_NAMESPACE     = os.getenv("AGENTCORE_NAMESPACE", "research-agent")
-USE_BEDROCK_MEMORY      = os.getenv("USE_BEDROCK_MEMORY", "true").lower() in ("1", "true", "yes")
+AGENTCORE_RUNTIME_NAME  = os.getenv("AGENTCORE_RUNTIME_NAME", "ResearchAgentA2A")
 
 # —— Semantic Dedup & Rerank Config ————————————————————————————————————————
 EMBEDDING_MODEL         = "all-MiniLM-L6-v2"
 RERANKER_MODEL          = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-LOCAL_MODEL_DIR         = "/opt/models"
+LOCAL_MODEL_DIR         = os.path.join(os.path.dirname(__file__), "models")
 CHUNK_SIZE              = 500       # words
 CHUNK_OVERLAP           = 100       # words
 MIN_CHUNK_WORDS         = 50
 SIMILARITY_THRESHOLD    = 0.85
 TOP_K_CHUNKS            = 25        # top-k chunks after reranking against the single topic
 
-# —— Tavily Search Config ——————————————————————————————————————————————————
+# —— Google Custom Search Config ——————————————————————————————————————————
+GOOGLE_SEARCH_MAX_RESULTS = 10   # max per query (Google CSE cap is 10)
+
+# —— Tavily Search Config (fallback) ——————————————————————————————————————
 TAVILY_MAX_RESULTS      = 10
 SCRAPE_WORKERS          = 15
 MIN_CONTENT_LEN         = 300
