@@ -8,8 +8,8 @@ The runtime receives the payload at its /invocations endpoint:
     {"input": {"prompt": "..."}}
 
 Usage:
-    python -m a2a_protocol.run_remote
-    python -m a2a_protocol.run_remote <<< "Your query here"
+    python -m a2a_protocol.scripts.run_remote
+    python -m a2a_protocol.scripts.run_remote <<< "Your query here"
 
 Environment (required):
     AWS_PROFILE           — AWS credentials profile (default: personal-dev)
@@ -26,7 +26,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 logging.basicConfig(
     level=logging.INFO,
