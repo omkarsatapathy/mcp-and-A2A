@@ -1,0 +1,120 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">MCP and A2A Agent Systems</title>
+  <desc id="desc">A visual overview of local Google ADK agents, A2A research services, MCP tools, and AWS Bedrock AgentCore deployment.</desc>
+  <defs>
+    <linearGradient id="bg" x1="84" y1="48" x2="1190" y2="612" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6FBFF"/>
+      <stop offset="0.48" stop-color="#EEF8F8"/>
+      <stop offset="1" stop-color="#FFF4E9"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="280" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E8F1FF"/>
+      <stop offset="1" stop-color="#D6E7FF"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="280" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E5FAF8"/>
+      <stop offset="1" stop-color="#CFF4EF"/>
+    </linearGradient>
+    <linearGradient id="slate" x1="0" y1="0" x2="280" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EEF2F7"/>
+      <stop offset="1" stop-color="#DFE7F0"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="280" y2="160" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF1E2"/>
+      <stop offset="1" stop-color="#FFE2C2"/>
+    </linearGradient>
+    <filter id="shadow" x="-40" y="-40" width="1360" height="720" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feOffset dy="16"/>
+      <feGaussianBlur stdDeviation="18"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.0627451 0 0 0 0 0.137255 0 0 0 0 0.239216 0 0 0 0.12 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_1_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_1_1" result="shape"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" rx="32" fill="url(#bg)"/>
+
+  <g opacity="0.18">
+    <path d="M0 96H1280" stroke="#9DB3CA"/>
+    <path d="M0 176H1280" stroke="#9DB3CA"/>
+    <path d="M0 256H1280" stroke="#9DB3CA"/>
+    <path d="M0 336H1280" stroke="#9DB3CA"/>
+    <path d="M0 416H1280" stroke="#9DB3CA"/>
+    <path d="M0 496H1280" stroke="#9DB3CA"/>
+    <path d="M0 576H1280" stroke="#9DB3CA"/>
+    <path d="M128 0V640" stroke="#9DB3CA"/>
+    <path d="M288 0V640" stroke="#9DB3CA"/>
+    <path d="M448 0V640" stroke="#9DB3CA"/>
+    <path d="M608 0V640" stroke="#9DB3CA"/>
+    <path d="M768 0V640" stroke="#9DB3CA"/>
+    <path d="M928 0V640" stroke="#9DB3CA"/>
+    <path d="M1088 0V640" stroke="#9DB3CA"/>
+  </g>
+
+  <circle cx="1085" cy="95" r="138" fill="#D7ECFF" opacity="0.55"/>
+  <circle cx="1160" cy="152" r="70" fill="#FFE6CB" opacity="0.7"/>
+  <circle cx="133" cy="560" r="92" fill="#D7F6F2" opacity="0.6"/>
+
+  <text x="70" y="110" fill="#10233E" font-family="Verdana, DejaVu Sans, sans-serif" font-size="54" font-weight="700">MCP &amp; A2A Agent Systems</text>
+  <text x="70" y="150" fill="#37506D" font-family="Verdana, DejaVu Sans, sans-serif" font-size="24" font-weight="400">Local Google ADK orchestrators, protocol-native remote services, and AWS Bedrock AgentCore deployment paths</text>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="208" width="260" height="170" rx="24" fill="url(#blue)"/>
+    <circle cx="112" cy="250" r="18" fill="#2563EB"/>
+    <text x="106" y="257" fill="#FFFFFF" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18" font-weight="700">L</text>
+    <text x="142" y="255" fill="#10233E" font-family="Verdana, DejaVu Sans, sans-serif" font-size="28" font-weight="700">Local ADK Agents</text>
+    <text x="94" y="298" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">Thin user-facing assistants</text>
+    <text x="94" y="328" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">Time lookup, tool routing,</text>
+    <text x="94" y="352" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">and remote delegation</text>
+
+    <rect x="370" y="208" width="260" height="170" rx="24" fill="url(#teal)"/>
+    <circle cx="412" cy="250" r="18" fill="#0F766E"/>
+    <text x="404" y="257" fill="#FFFFFF" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18" font-weight="700">A</text>
+    <text x="442" y="255" fill="#10233E" font-family="Verdana, DejaVu Sans, sans-serif" font-size="28" font-weight="700">A2A Service</text>
+    <text x="394" y="298" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">Typed JSON-RPC requests,</text>
+    <text x="394" y="328" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">task lifecycle events,</text>
+    <text x="394" y="352" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">and discoverable agent cards</text>
+
+    <rect x="670" y="208" width="260" height="170" rx="24" fill="url(#slate)"/>
+    <circle cx="712" cy="250" r="18" fill="#334155"/>
+    <text x="704" y="257" fill="#FFFFFF" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18" font-weight="700">P</text>
+    <text x="742" y="255" fill="#10233E" font-family="Verdana, DejaVu Sans, sans-serif" font-size="28" font-weight="700">Research Pipeline</text>
+    <text x="694" y="298" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">Search, scrape, dedup,</text>
+    <text x="694" y="328" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">rerank, and summarize</text>
+    <text x="694" y="352" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">with ONNX and FAISS</text>
+
+    <rect x="970" y="208" width="240" height="170" rx="24" fill="url(#orange)"/>
+    <circle cx="1012" cy="250" r="18" fill="#EA580C"/>
+    <text x="1003" y="257" fill="#FFFFFF" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18" font-weight="700">W</text>
+    <text x="1042" y="255" fill="#10233E" font-family="Verdana, DejaVu Sans, sans-serif" font-size="28" font-weight="700">AWS Runtime</text>
+    <text x="994" y="298" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">AgentCore, ECR, Secrets,</text>
+    <text x="994" y="328" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">and observability for</text>
+    <text x="994" y="352" fill="#2E4A68" font-family="Verdana, DejaVu Sans, sans-serif" font-size="18">deployed agent services</text>
+  </g>
+
+  <path d="M330 293H370" stroke="#4D6C8F" stroke-width="4" stroke-linecap="round"/>
+  <path d="M630 293H670" stroke="#4D6C8F" stroke-width="4" stroke-linecap="round"/>
+  <path d="M930 293H970" stroke="#4D6C8F" stroke-width="4" stroke-linecap="round"/>
+  <path d="M361 281L376 293L361 305" stroke="#4D6C8F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M661 281L676 293L661 305" stroke="#4D6C8F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M961 281L976 293L961 305" stroke="#4D6C8F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g>
+    <rect x="70" y="450" width="174" height="48" rx="24" fill="#FFFFFF" stroke="#BDD3E7"/>
+    <text x="104" y="481" fill="#17304C" font-family="Verdana, DejaVu Sans, sans-serif" font-size="20" font-weight="700">SigV4 Security</text>
+
+    <rect x="264" y="450" width="196" height="48" rx="24" fill="#FFFFFF" stroke="#BDD3E7"/>
+    <text x="297" y="481" fill="#17304C" font-family="Verdana, DejaVu Sans, sans-serif" font-size="20" font-weight="700">Typed Protocols</text>
+
+    <rect x="480" y="450" width="182" height="48" rx="24" fill="#FFFFFF" stroke="#BDD3E7"/>
+    <text x="519" y="481" fill="#17304C" font-family="Verdana, DejaVu Sans, sans-serif" font-size="20" font-weight="700">ONNX + FAISS</text>
+
+    <rect x="682" y="450" width="197" height="48" rx="24" fill="#FFFFFF" stroke="#BDD3E7"/>
+    <text x="722" y="481" fill="#17304C" font-family="Verdana, DejaVu Sans, sans-serif" font-size="20" font-weight="700">Secrets Ready</text>
+
+    <rect x="899" y="450" width="217" height="48" rx="24" fill="#FFFFFF" stroke="#BDD3E7"/>
+    <text x="939" y="481" fill="#17304C" font-family="Verdana, DejaVu Sans, sans-serif" font-size="20" font-weight="700">Cloud Deployment</text>
+  </g>
+
+  <text x="70" y="560" fill="#37506D" font-family="Verdana, DejaVu Sans, sans-serif" font-size="20">Two protocol patterns, one architectural theme: discoverable capabilities, explicit boundaries, and deployable agent systems.</text>
+</svg>
